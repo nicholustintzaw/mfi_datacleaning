@@ -93,10 +93,9 @@ count if partid != partid_repeat
 			keep partid partid_repeat vil_id village_id village tract
 			export excel using "$output\data_checks", sheet("partid mismatch") sheetreplace first(var)		
 		restore
-* NCL note: 23 unmatched observation noticed after correcting 101 village id mismatched with partid in HFC
-* any follow-up data check, you want me to do on this? 
+* LM_2503 - let's find out where these mismatches were corrected. After, we can drop the variable partid_repeat
 
-*drop partid_repeat
+* drop partid_repeat
 
 
 // name
@@ -143,10 +142,8 @@ drop _match1 _match2 phone phone_yesno
 
 ren phone_number phone // Lise
 
-
 // gender
 tab gender, m
-
 
 // nrc_yn
 tab nrc_yn, m
@@ -168,6 +165,7 @@ tab nrc_status, m
 tab nrc_digits, m
 
 * NCL questions >> if you want to make dataset matching, could you please share me the directories of datasets
+	** LM_2503: I believe Teun used this variable to match with VF dataset in order to calculate take-up rates
 
 
 // state
@@ -229,7 +227,8 @@ count if village_id != vil_id
 distinct village_id vil_id if village_id != vil_id
 
 /* 8 un-matched observation were noticed and they were come from 8 different villages
-
+	** LM_2503: see word document for additional cleaning
+	
             |        Observations
             |      total   distinct
 ------------+----------------------
@@ -237,6 +236,13 @@ distinct village_id vil_id if village_id != vil_id
      vil_id |          8          8
 */
 
+
+		// Lise added
+		preserve
+			keep if village_id != vil_id
+			keep partid village vil_id village_id village tract
+			export excel using "$output\data_checks", sheet("village_id and vil_id") sheetreplace first(var)		
+		restore
 
 // village_name
 tab	village_name
@@ -253,7 +259,7 @@ tab confirm, m
 
 // dropout_reason
 replace dropout_reason = ".m" if confirm == 1
-tab dropout_reason, m
+tab dropout_reason, m  // LM_2503: Have you translated dropout_reason?
 
 // spouse
 replace spouse = .m if confirm == 0
@@ -275,7 +281,8 @@ tab spouse_mi_reason, m
 
 // spouse_mi_reason_osp
 tab spouse_mi_reason_osp, m
-drop spouse_mi_reason_osp // Lise added
+	* br spouse_mi_reason spouse_mi_reason_osp if !mi(spouse_mi_reason_osp) // osp has been recoded
+	drop spouse_mi_reason_osp // Lise added
 
 // consent
 replace consent = .m if confirm == 0
@@ -289,8 +296,23 @@ tab refusal, m
 
 // refusal_osp
 replace refusal_osp = ".m" if refusal != -66
-tab refusal_osp, m // ------------------------------------------------------ TO DO: Please recode refusal if refusal == -66, or translate refusal_osp
-
+tab refusal_osp, m 
+		
+		// LM_2503 added
+		replace refusal = 7 if key == "uuid:1e055094-60c6-4e0b-8980-ff1d2c289cf0" // travelling
+		replace refusal = 7 if key == "uuid:6fbff26f-3043-40a8-8ca3-43b2978443e2" // travelling
+		replace refusal = 7 if key == "uuid:c13edff9-7141-457e-addf-0d7614df6396" // travelling
+		replace refusal = 7 if key == "uuid:7841ec0e-a30a-4dd2-a35c-b3aeea6e5e49" // travelling
+		replace refusal = 7 if key == "uuid:9a874d2d-fde4-4471-8a9e-fdb9ee61b850" // travelling
+		replace refusal = 7 if key == "uuid:b0d40a56-5157-40ed-ac39-4b306b625d35" // travelling
+		replace refusal = 7 if key == "uuid:92f32f06-6f1d-49cd-a289-62af2f483df2" // travelling
+		replace refusal = 7 if key == "uuid:e9d85ad7-64ce-48b8-803b-ee37d49a5bcf" // travelling
+		replace refusal = 7 if key == "uuid:0ec72775-cd47-4acb-85d0-51d9349c3f62" // travelling
+		replace refusal = 7 if key == "uuid:5daed9a1-b533-4f96-b966-18795ad00ec5" // travelling
+		// NOTE: the three remaining "other" should actually be dropouts, instead of no consent. Lise will clean this
+		
+		replace refusal_osp = ".m" if refusal != -66
+		
 // sign1
 replace sign1 = ".m" if consent != 1
 tab sign1, m
@@ -310,7 +332,7 @@ tab audio_consent, m
 
 //	gps_consent
 replace gps_consent = .m if consent != 1
-replace gps_consent = .n if consent == 1 & mi(gps_consent)
+replace gps_consent = .n if consent == 1 & mi(gps_consent) // variable gps_consent was added to survey during data collection
 tab gps_consent, m
 
 // geopointlatitude geopointlongitude geopointaltitude geopointaccuracy
@@ -318,18 +340,22 @@ local geopoint geopointlatitude geopointlongitude geopointaltitude geopointaccur
 
 foreach var in `geopoint' {
 	replace `var' = .m if consent != 1 & mi(`var')
+	replace `var' = .n if key == "uuid:69ecbcb2-6c5e-4c40-8015-1575b957d91d" // added LM_2503, coordinate was taken from different HH
 }
 
 // gps2
 replace gps2 = .m if mi(gps2) & consent != 1
 replace gps2 = .n if mi(gps2) & consent == 1 & !mi(geopointlatitude)
 replace gps2 = .m if mi(gps2) & consent == 1 & mi(geopointlatitude)
+replace gps2 = .m if key == "uuid:69ecbcb2-6c5e-4c40-8015-1575b957d91d" // added LM_2503, coordinate was taken from different HH
+
 tab gps2, m
 
 // gps2_osp
 replace gps2_osp = ".m" if gps2 != -66
 tab gps2_osp, m 
 
+	
 //	n_sp
 tab n_sp, m
 * note: did not understand on this variable 
@@ -353,9 +379,13 @@ replace refusal_sp = .m if consent_sp != 0
 tab refusal_sp, m
 
 //	refusal_sp_osp
-replace refusal_sp_osp = ".m" if refusal_sp != -66
-tab refusal_sp_osp, m // ------------------------------------------------------ TO DO: Please recode refusal_sp if refusal_sp == -66, or translate refusal_sp_osp
 
+	// added LM_2503
+	replace refusal_sp = 7 if refusal_sp == -66 // spouse is travelling - recoded
+	
+replace refusal_sp_osp = ".m" if refusal_sp != -66
+tab refusal_sp_osp, m 
+	
 //	sign2
 replace sign2 = ".m" if consent_sp != 1
 replace sign2 = ".n" if consent_sp == 1 & mi(sign2)
@@ -374,7 +404,7 @@ tab photo_signature2, m
 replace svy_loc = .m if consent != 1
 tab svy_loc, m
 
-
+*** LM_2503 checked until here 
 ********************************************************************************
 ** Household and respondent characteristics 
 ********************************************************************************
@@ -2515,7 +2545,3 @@ keep `strvars'
 
 keep *osp* key partid
 export excel using "$BL_HFC/04_checks/02_outputs/additional_translation.xlsx", firstrow(var) sheet("to translate") replace
-
-
-
-
